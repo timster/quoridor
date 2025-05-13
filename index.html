@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quoridor</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f0f0;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+    }
+
+    #app {
+      background: #fff;
+      padding: 32px;
+      border-radius: 16px;
+      box-shadow: 0 2px 16px rgba(0, 0, 0, 0.1);
+      margin-top: 14px
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(9, 40px);
+      grid-template-rows: repeat(9, 40px);
+      gap: 4px;
+      margin-bottom: 24px;
+    }
+
+    .cell {
+      width: 40px;
+      height: 40px;
+      background: #e0cda9;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      position: relative;
+      transition: background 0.2s;
+    }
+
+    .cell.highlight {
+      box-shadow: 0 0 0 3px #3498dbcc;
+      background: #d0e8fa;
+      cursor: pointer;
+    }
+
+    .player {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .player-blue {
+      background: #3498db;
+      box-shadow: 0 0 8px #3498db88;
+    }
+
+    .player-red {
+      background: #e74c3c;
+      box-shadow: 0 0 8px #e74c3c88;
+    }
+
+    .wall-hotspot {
+      position: absolute;
+      z-index: 2;
+      cursor: pointer;
+      opacity: 0.3;
+      transition: opacity 0.2s;
+    }
+
+    .wall-hotspot.active {
+      opacity: 0.7;
+      background: #888;
+    }
+
+    .wall-horizontal {
+      width: 84px;
+      /* 40px (cell) + 4px (gap) + 40px (cell) */
+      height: 10px;
+      left: 0;
+      top: 36px;
+    }
+
+    .wall-vertical {
+      width: 10px;
+      height: 84px;
+      /* 40px (cell) + 4px (gap) + 40px (cell) */
+      left: 36px;
+      top: 0;
+    }
+
+    .wall-placed {
+      opacity: 1 !important;
+      box-shadow: 0 0 8px #b07b36cc;
+      background: #888;
+    }
+
+    .wall-counters {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      margin-top: 8px;
+    }
+
+    .wall-counter {
+      font-weight: bold;
+      font-size: 1.1em;
+    }
+
+    .wall-counter.blue {
+      color: #3498db;
+    }
+
+    .wall-counter.red {
+      color: #e74c3c;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+      margin-top: 0;
+      font-size: 2em;
+      text-align: center;
+    }
+
+    .winner-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .winner-message {
+      background: #fff;
+      padding: 32px 48px;
+      border-radius: 16px;
+      box-shadow: 0 2px 16px rgba(0, 0, 0, 0.2);
+      text-align: center;
+    }
+
+    .winner-message h2 {
+      margin-bottom: 16px;
+      font-size: 2em;
+    }
+
+    .winner-message button {
+      font-size: 1.1em;
+      padding: 8px 24px;
+      border-radius: 8px;
+      border: none;
+      background: #3498db;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .winner-message button:hover {
+      background: #217dbb;
+    }
+
+    .instructions {
+      margin-top: 32px;
+      background: #f9f9f9;
+      border-radius: 10px;
+      padding: 18px 24px;
+      font-size: 1.1em;
+      color: #333;
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .instructions h2 {
+      margin-top: 0;
+    }
+
+    #app,
+    .instructions {
+      margin-left: auto;
+      margin-right: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <h1>Quoridor</h1>
+    <div v-if="winner" class="winner-modal">
+      <div class="winner-message">
+        <h2>{{ winner }} wins!</h2>
+        <button @click="newGame">New Game</button>
+      </div>
+    </div>
+    <div class="wall-counters">
+      <div class="wall-counter blue">Blue Walls: {{ playerBlue.wallsLeft }}</div>
+      <div class="wall-counter red">Red Walls: {{ playerRed.wallsLeft }}</div>
+    </div>
+    <div class="board">
+      <template v-for="(row, rowIndex) in 9">
+        <template v-for="(col, colIndex) in 9">
+          <div class="cell" :class="{ highlight: moveMode && isPossibleMove(rowIndex, colIndex) }"
+            @click="onCellClick(rowIndex, colIndex)" style="position: relative;">
+            <div v-if="playerBlue.row === rowIndex && playerBlue.col === colIndex" class="player player-blue"
+              @click.stop="toggleMoveMode"></div>
+            <div v-else-if="playerRed.row === rowIndex && playerRed.col === colIndex" class="player player-red"></div>
+
+            <!-- Always render placed horizontal walls -->
+            <div v-if="rowIndex < 8 && colIndex < 8 && isWallPlaced('h', rowIndex, colIndex)"
+              class="wall-hotspot wall-horizontal wall-placed"></div>
+            <!-- Always render placed vertical walls -->
+            <div v-if="rowIndex < 8 && colIndex < 8 && isWallPlaced('v', rowIndex, colIndex)"
+              class="wall-hotspot wall-vertical wall-placed"></div>
+
+            <!-- Only render hotspots for placement when not in move mode and not already placed -->
+            <div v-if="rowIndex < 8 && colIndex < 8 && !moveMode && !isWallPlaced('h', rowIndex, colIndex)"
+              class="wall-hotspot wall-horizontal" :class="{ active: isWallHover('h', rowIndex, colIndex) }"
+              @mouseenter="onWallHover('h', rowIndex, colIndex)" @mouseleave="onWallHover(null, null, null)"
+              @click.stop="placeWall('h', rowIndex, colIndex)"></div>
+            <div v-if="rowIndex < 8 && colIndex < 8 && !moveMode && !isWallPlaced('v', rowIndex, colIndex)"
+              class="wall-hotspot wall-vertical" :class="{ active: isWallHover('v', rowIndex, colIndex) }"
+              @mouseenter="onWallHover('v', rowIndex, colIndex)" @mouseleave="onWallHover(null, null, null)"
+              @click.stop="placeWall('v', rowIndex, colIndex)"></div>
+          </div>
+        </template>
+      </template>
+    </div>
+  </div>
+  <div class="instructions">
+    <h2>How to Play</h2>
+    <ul>
+      <li><strong>Goal:</strong> Get your pawn to the opposite side of the board before your opponent.</li>
+      <li>1. On your turn, you can <strong>place a wall</strong> or <strong>move your pawn</strong>.</li>
+      <li>2. Walls cannot overlap or intersect.</li>
+      <li>3. You cannot completely block your opponent's path to the finish.</li>
+      <li>4. You may jump over your opponent if they are directly in front of you.</li>
+      <li>5. If you cannot jump directly over, you may jump to the side.</li>
+    </ul>
+    <p><strong>To move:</strong> Click your pawn, then click where you want to move.</p>
+    <p><strong>To place a wall:</strong> Hover over and click where you want the wall.</p>
+  </div>
+  <script type="module">
+    const { createApp, ref, computed, watch } = Vue;
+    createApp({
+      setup() {
+        const playerBlue = ref({ row: 8, col: 4, wallsLeft: 10 });
+        const playerRed = ref({ row: 0, col: 4, wallsLeft: 10 });
+        const moveMode = ref(false);
+        const horizontalWalls = ref([]); // {row, col}
+        const verticalWalls = ref([]);   // {row, col}
+        const wallHover = ref({ type: null, row: null, col: null });
+        const winner = ref("");
+        const turnCount = ref(0);
+
+        function toggleMoveMode() {
+          moveMode.value = !moveMode.value;
+        }
+
+        function isWallBetween(r1, c1, r2, c2) {
+          // Moving up
+          if (r2 === r1 - 1 && c2 === c1) {
+            // Check for horizontal wall above r2,c2 (both segments)
+            return horizontalWalls.value.some(w =>
+              w.row === r2 && (w.col === c1 || w.col === c1 - 1)
+            );
+          }
+          // Moving down
+          if (r2 === r1 + 1 && c2 === c1) {
+            // Check for horizontal wall at r1,c1 (both segments)
+            return horizontalWalls.value.some(w =>
+              w.row === r1 && (w.col === c1 || w.col === c1 - 1)
+            );
+          }
+          // Moving left
+          if (c2 === c1 - 1 && r2 === r1) {
+            // Check for vertical wall left of r2,c2 (both segments)
+            return verticalWalls.value.some(w =>
+              w.col === c2 && (w.row === r1 || w.row === r1 - 1)
+            );
+          }
+          // Moving right
+          if (c2 === c1 + 1 && r2 === r1) {
+            // Check for vertical wall at r1,c1 (both segments)
+            return verticalWalls.value.some(w =>
+              w.col === c1 && (w.row === r1 || w.row === r1 - 1)
+            );
+          }
+          return false;
+        }
+
+        function isPossibleMove(row, col) {
+          if (!moveMode.value) return false;
+          const { row: bRow, col: bCol } = playerBlue.value;
+          const { row: rRow, col: rCol } = playerRed.value;
+          // Can't move to own position
+          if (row === bRow && col === bCol) return false;
+          // Out of bounds
+          if (row < 0 || row > 8 || col < 0 || col > 8) return false;
+
+          // Directions: [dr, dc]
+          const directions = [
+            [-1, 0], // up
+            [1, 0],  // down
+            [0, -1], // left
+            [0, 1],  // right
+          ];
+
+          for (const [dr, dc] of directions) {
+            const nRow = bRow + dr;
+            const nCol = bCol + dc;
+            // 1. Can move up/down/left/right if not blocked by wall, other player, or edge
+            if (row === nRow && col === nCol) {
+              if (nRow < 0 || nRow > 8 || nCol < 0 || nCol > 8) continue;
+              if (isWallBetween(bRow, bCol, nRow, nCol)) continue;
+              if (nRow === rRow && nCol === rCol) continue;
+              return true;
+            }
+            // 2. If blocked by other player, allow jumping 1 block over if that block is open and not blocked by a wall
+            if (nRow === rRow && nCol === rCol) {
+              const jumpRow = rRow + dr;
+              const jumpCol = rCol + dc;
+              if (row === jumpRow && col === jumpCol) {
+                if (jumpRow >= 0 && jumpRow <= 8 && jumpCol >= 0 && jumpCol <= 8) {
+                  if (!isWallBetween(bRow, bCol, nRow, nCol) && !isWallBetween(rRow, rCol, jumpRow, jumpCol)) {
+                    if (!(jumpRow === bRow && jumpCol === bCol)) {
+                      return true;
+                    }
+                  }
+                }
+              }
+              // 3. If can't jump over due to wall or edge, allow jumping to the side of the other player if that block is open and not blocked by a wall
+              if (isWallBetween(rRow, rCol, rRow + dr, rCol + dc) || jumpRow < 0 || jumpRow > 8 || jumpCol < 0 || jumpCol > 8) {
+                // Try side jumps (perpendicular directions)
+                for (const [sdr, sdc] of directions) {
+                  // Only perpendicular
+                  if (sdr === dr && sdc === dc) continue;
+                  if (sdr === -dr && sdc === -dc) continue;
+                  const sideRow = rRow + sdr;
+                  const sideCol = rCol + sdc;
+                  if (row === sideRow && col === sideCol) {
+                    if (sideRow >= 0 && sideRow <= 8 && sideCol >= 0 && sideCol <= 8) {
+                      if (!isWallBetween(bRow, bCol, nRow, nCol) && !isWallBetween(rRow, rCol, sideRow, sideCol)) {
+                        if (!(sideRow === bRow && sideCol === bCol)) {
+                          return true;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          return false;
+        }
+
+        function onCellClick(row, col) {
+          if (winner.value) return;
+          if (moveMode.value && isPossibleMove(row, col)) {
+            playerBlue.value.row = row;
+            playerBlue.value.col = col;
+            moveMode.value = false;
+            // After blue moves, let red AI play
+            aiRedTurn();
+          }
+        }
+
+        function isWallPlaced(type, row, col) {
+          if (type === 'h') {
+            return horizontalWalls.value.some(w => w.row === row && w.col === col);
+          } else if (type === 'v') {
+            return verticalWalls.value.some(w => w.row === row && w.col === col);
+          }
+          return false;
+        }
+
+        function isWallHover(type, row, col) {
+          return wallHover.value.type === type && wallHover.value.row === row && wallHover.value.col === col;
+        }
+
+        function onWallHover(type, row, col) {
+          wallHover.value = { type, row, col };
+        }
+
+        // Helper: BFS to check if a player can reach their goal row
+        function hasPath(startRow, startCol, goalRows, hWalls, vWalls) {
+          const queue = [[startRow, startCol]];
+          const visited = Array.from({ length: 9 }, () => Array(9).fill(false));
+          visited[startRow][startCol] = true;
+          const directions = [
+            [-1, 0], [1, 0], [0, -1], [0, 1]
+          ];
+          while (queue.length) {
+            const [r, c] = queue.shift();
+            if (goalRows.includes(r)) return true;
+            for (const [dr, dc] of directions) {
+              const nr = r + dr, nc = c + dc;
+              if (nr < 0 || nr > 8 || nc < 0 || nc > 8) continue;
+              if (visited[nr][nc]) continue;
+              // Use the isWallBetween logic, but with provided wall arrays
+              let blocked = false;
+              if (dr === -1 && hWalls.some(w => w.row === nr && (w.col === c || w.col === c - 1))) blocked = true;
+              if (dr === 1 && hWalls.some(w => w.row === r && (w.col === c || w.col === c - 1))) blocked = true;
+              if (dc === -1 && vWalls.some(w => w.col === nc && (w.row === r || w.row === r - 1))) blocked = true;
+              if (dc === 1 && vWalls.some(w => w.col === c && (w.row === r || w.row === r - 1))) blocked = true;
+              if (blocked) continue;
+              visited[nr][nc] = true;
+              queue.push([nr, nc]);
+            }
+          }
+          return false;
+        }
+
+        function isBlockingAllPaths(type, row, col) {
+          const hWalls = horizontalWalls.value.slice();
+          const vWalls = verticalWalls.value.slice();
+          if (type === 'h') hWalls.push({ row, col });
+          if (type === 'v') vWalls.push({ row, col });
+          // Blue must be able to reach row 0, red must be able to reach row 8
+          const blueOk = hasPath(playerBlue.value.row, playerBlue.value.col, [0], hWalls, vWalls);
+          const redOk = hasPath(playerRed.value.row, playerRed.value.col, [8], hWalls, vWalls);
+          return !(blueOk && redOk); // returns true if blocking all paths
+        }
+
+        function isWallCrossing(type, row, col) {
+          if (type === 'h') {
+            // Overlap with another horizontal wall
+            if (
+              horizontalWalls.value.some(w => w.row === row && (w.col === col || w.col === col - 1 || w.col === col + 1))
+            ) {
+              return true;
+            }
+            // "+" intersection with vertical wall at (row, col)
+            if (
+              verticalWalls.value.some(w => (w.col === col && w.row === row))
+            ) {
+              return true;
+            }
+          } else if (type === 'v') {
+            // Overlap with another vertical wall
+            if (
+              verticalWalls.value.some(w => w.col === col && (w.row === row || w.row === row - 1 || w.row === row + 1))
+            ) {
+              return true;
+            }
+            // "+" intersection with horizontal wall at (row, col) 
+            if (
+              horizontalWalls.value.some(w => (w.row === row && w.col === col))) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        function placeWall(type, row, col) {
+          if (moveMode.value) return;
+          if (playerBlue.value.wallsLeft <= 0) return;
+          if (isWallPlaced(type, row, col)) return;
+          if (isWallCrossing(type, row, col)) {
+            alert('Invalid wall placement! Walls cannot intersect or overlap.');
+            return;
+          }
+
+          if (type === 'h') {
+            if (isBlockingAllPaths('h', row, col)) {
+              alert('Wall would block all paths!');
+              return;
+            }
+            horizontalWalls.value.push({ row, col });
+            playerBlue.value.wallsLeft--;
+            aiRedTurn();
+          } else if (type === 'v') {
+            if (isBlockingAllPaths('v', row, col)) {
+              alert('Wall would block all paths!');
+              return;
+            }
+            verticalWalls.value.push({ row, col });
+            playerBlue.value.wallsLeft--;
+            aiRedTurn();
+          }
+          turnCount.value++;
+        }
+
+        // Watch for win condition
+        watch(
+          () => [playerBlue.value.row, playerRed.value.row],
+          ([blueRow, redRow]) => {
+            if (blueRow === 0) {
+              winner.value = "Blue";
+            } else if (redRow === 8) {
+              winner.value = "Red";
+            }
+          }
+        );
+
+        function newGame() {
+          playerBlue.value = { row: 8, col: 4, wallsLeft: 10 };
+          playerRed.value = { row: 0, col: 4, wallsLeft: 10 };
+          horizontalWalls.value = [];
+          verticalWalls.value = [];
+          wallHover.value = { type: null, row: null, col: null };
+          moveMode.value = false;
+          winner.value = "";
+        }
+
+        // Helper: Find shortest path using BFS, returns path as array of [row, col]
+        function findShortestPath(startRow, startCol, goalRows, hWalls, vWalls, otherPlayer) {
+          const queue = [[[startRow, startCol]]];
+          const visited = Array.from({ length: 9 }, () => Array(9).fill(false));
+          visited[startRow][startCol] = true;
+          const directions = [
+            [-1, 0], [1, 0], [0, -1], [0, 1]
+          ];
+          while (queue.length) {
+            const path = queue.shift();
+            const [r, c] = path[path.length - 1];
+            if (goalRows.includes(r)) return path;
+            for (const [dr, dc] of directions) {
+              const nr = r + dr, nc = c + dc;
+              if (nr < 0 || nr > 8 || nc < 0 || nc > 8) continue;
+              if (visited[nr][nc]) continue;
+              // Use the isWallBetween logic, but with provided wall arrays
+              let blocked = false;
+              if (dr === -1 && hWalls.some(w => w.row === nr && (w.col === c || w.col === c - 1))) blocked = true;
+              if (dr === 1 && hWalls.some(w => w.row === r && (w.col === c || w.col === c - 1))) blocked = true;
+              if (dc === -1 && vWalls.some(w => w.col === nc && (w.row === r || w.row === r - 1))) blocked = true;
+              if (dc === 1 && vWalls.some(w => w.col === c && (w.row === r || w.row === r - 1))) blocked = true;
+              if (blocked) continue;
+              visited[nr][nc] = true;
+              queue.push([...path, [nr, nc]]);
+            }
+          }
+          return null;
+        }
+
+        // Red's movement logic (mirrors blue's isPossibleMove, but from red's perspective)
+        function isPossibleMoveRed(row, col) {
+          const { row: rRow, col: rCol } = playerRed.value;
+          const { row: bRow, col: bCol } = playerBlue.value;
+          if (row === rRow && col === rCol) return false;
+          if (row < 0 || row > 8 || col < 0 || col > 8) return false;
+          const directions = [
+            [-1, 0], [1, 0], [0, -1], [0, 1]
+          ];
+          for (const [dr, dc] of directions) {
+            const nRow = rRow + dr;
+            const nCol = rCol + dc;
+            // 1. Can move if not blocked by wall, blue, or edge
+            if (row === nRow && col === nCol) {
+              if (nRow < 0 || nRow > 8 || nCol < 0 || nCol > 8) continue;
+              if (isWallBetween(rRow, rCol, nRow, nCol)) continue;
+              if (nRow === bRow && nCol === bCol) continue;
+              return true;
+            }
+            // 2. If blocked by blue, allow jumping 1 block over if open and not blocked by a wall
+            if (nRow === bRow && nCol === bCol) {
+              const jumpRow = bRow + dr;
+              const jumpCol = bCol + dc;
+              if (row === jumpRow && col === jumpCol) {
+                if (jumpRow >= 0 && jumpRow <= 8 && jumpCol >= 0 && jumpCol <= 8) {
+                  if (!isWallBetween(rRow, rCol, nRow, nCol) && !isWallBetween(bRow, bCol, jumpRow, jumpCol)) {
+                    if (!(jumpRow === rRow && jumpCol === rCol)) {
+                      return true;
+                    }
+                  }
+                }
+              }
+              // 3. If can't jump over due to wall or edge, allow jumping to the side of blue if open and not blocked by a wall
+              if (isWallBetween(bRow, bCol, bRow + dr, bCol + dc) || jumpRow < 0 || jumpRow > 8 || jumpCol < 0 || jumpCol > 8) {
+                for (const [sdr, sdc] of directions) {
+                  if (sdr === dr && sdc === dc) continue;
+                  if (sdr === -dr && sdc === -dc) continue;
+                  const sideRow = bRow + sdr;
+                  const sideCol = bCol + sdc;
+                  if (row === sideRow && col === sideCol) {
+                    if (sideRow >= 0 && sideRow <= 8 && sideCol >= 0 && sideCol <= 8) {
+                      if (!isWallBetween(rRow, rCol, nRow, nCol) && !isWallBetween(bRow, bCol, sideRow, sideCol)) {
+                        if (!(sideRow === rRow && sideCol === rCol)) {
+                          return true;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          return false;
+        }
+
+        function aiRedTurn() {
+          if (winner.value) return;
+
+          const hWalls = horizontalWalls.value.slice();
+          const vWalls = verticalWalls.value.slice();
+
+          // After 4th turn, 80% chance to try to place a wall to block blue
+          if (turnCount.value >= 4 && playerRed.value.wallsLeft > 0 && Math.random() < 0.8) {
+            // Find blue's shortest path
+            const bluePath = findShortestPath(
+              playerBlue.value.row,
+              playerBlue.value.col,
+              [0],
+              hWalls,
+              vWalls,
+              playerRed.value
+            );
+            const redPath = findShortestPath(
+              playerRed.value.row,
+              playerRed.value.col,
+              [8],
+              hWalls,
+              vWalls,
+              playerBlue.value
+            );
+            if (bluePath && bluePath.length > 2 && redPath) {
+              // Try to block blue's next step (between bluePath[1] and bluePath[2])
+              const [from, to] = [bluePath[1], bluePath[2]];
+              const wallOptions = [];
+
+              // Check for possible horizontal wall
+              if (from[0] === to[0] && Math.abs(from[1] - to[1]) === 1) {
+                // Moving left/right, so vertical wall between them
+                const row = from[0];
+                const col = Math.min(from[1], to[1]);
+                wallOptions.push({ type: 'v', row, col });
+              }
+              // Check for possible vertical wall
+              if (from[1] === to[1] && Math.abs(from[0] - to[0]) === 1) {
+                // Moving up/down, so horizontal wall between them
+                const row = Math.min(from[0], to[0]);
+                const col = from[1];
+                wallOptions.push({ type: 'h', row, col });
+              }
+
+              for (const { type, row, col } of wallOptions) {
+                // Only place if legal and not already placed
+                if (
+                  !isWallPlaced(type, row, col) &&
+                  !isWallCrossing(type, row, col) &&
+                  !isBlockingAllPaths(type, row, col)
+                ) {
+                  // Simulate wall placement
+                  const newHWalls = hWalls.slice();
+                  const newVWalls = vWalls.slice();
+                  if (type === 'h') newHWalls.push({ row, col });
+                  if (type === 'v') newVWalls.push({ row, col });
+
+                  // Check if blue's path gets longer and red's does not
+                  const newBluePath = findShortestPath(
+                    playerBlue.value.row,
+                    playerBlue.value.col,
+                    [0],
+                    newHWalls,
+                    newVWalls,
+                    playerRed.value
+                  );
+                  const newRedPath = findShortestPath(
+                    playerRed.value.row,
+                    playerRed.value.col,
+                    [8],
+                    newHWalls,
+                    newVWalls,
+                    playerBlue.value
+                  );
+                  if (
+                    newBluePath &&
+                    newRedPath &&
+                    newBluePath.length > bluePath.length &&
+                    newRedPath.length === redPath.length
+                  ) {
+                    // Place the wall
+                    if (type === 'h') horizontalWalls.value.push({ row, col });
+                    if (type === 'v') verticalWalls.value.push({ row, col });
+                    playerRed.value.wallsLeft--;
+                    turnCount.value++;
+                    return;
+                  }
+                }
+              }
+            }
+          }
+
+          // Otherwise, move red as before (shortest path, with jump logic)
+          const path = findShortestPath(
+            playerRed.value.row,
+            playerRed.value.col,
+            [8], // goal rows
+            hWalls,
+            vWalls,
+            playerBlue.value // treat blue as an obstacle
+          );
+
+          if (path && path.length > 1) {
+            const [nextRow, nextCol] = path[1];
+            const { row: bRow, col: bCol } = playerBlue.value;
+            const { row: rRow, col: rCol } = playerRed.value;
+
+            // If the next step is blue's position, try to jump over or side-jump
+            if (nextRow === bRow && nextCol === bCol) {
+              // Direction from red to blue
+              const dr = bRow - rRow;
+              const dc = bCol - rCol;
+              const jumpRow = bRow + dr;
+              const jumpCol = bCol + dc;
+
+              // Try to jump over blue if possible
+              if (
+                jumpRow >= 0 && jumpRow <= 8 && jumpCol >= 0 && jumpCol <= 8 &&
+                !isWallBetween(rRow, rCol, bRow, bCol) &&
+                !isWallBetween(bRow, bCol, jumpRow, jumpCol) &&
+                !(jumpRow === bRow && jumpCol === bCol)
+              ) {
+                playerRed.value.row = jumpRow;
+                playerRed.value.col = jumpCol;
+                turnCount.value++;
+                return;
+              }
+
+              // If can't jump, try to side-jump (perpendicular directions)
+              const directions = [
+                [-dc, -dr], // perpendicular left
+                [dc, dr],   // perpendicular right
+              ];
+              for (const [sdr, sdc] of directions) {
+                const sideRow = bRow + sdr;
+                const sideCol = bCol + sdc;
+                if (
+                  sideRow >= 0 && sideRow <= 8 && sideCol >= 0 && sideCol <= 8 &&
+                  !isWallBetween(rRow, rCol, bRow, bCol) &&
+                  !isWallBetween(bRow, bCol, sideRow, sideCol) &&
+                  !(sideRow === bRow && sideCol === bCol)
+                ) {
+                  playerRed.value.row = sideRow;
+                  playerRed.value.col = sideCol;
+                  turnCount.value++;
+                  return;
+                }
+              }
+              // If can't jump or side-jump, do nothing (shouldn't happen in normal play)
+              return;
+            }
+
+            // If the cell is not occupied by blue, move there
+            if (!(nextRow === bRow && nextCol === bCol)) {
+              playerRed.value.row = nextRow;
+              playerRed.value.col = nextCol;
+              turnCount.value++;
+              return;
+            }
+          }
+          // If no path, do nothing
+        }
+
+        return {
+          playerBlue,
+          playerRed,
+          moveMode,
+          toggleMoveMode,
+          isPossibleMove,
+          onCellClick,
+          horizontalWalls,
+          verticalWalls,
+          wallHover,
+          isWallPlaced,
+          isWallHover,
+          onWallHover,
+          placeWall,
+          winner,
+          newGame,
+          aiRedTurn
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+
+</html>
