@@ -25,25 +25,27 @@
     <div class="grid grid-cols-9 gap-1 mb-6">
       <template v-for="(row, rowIndex) in 9">
         <template v-for="(col, colIndex) in 9">
+          <!-- Game board cell -->
           <div class="w-10 h-10 bg-amber-100 rounded-md flex items-center justify-center text-2xl relative transition-colors"
             :class="{ 'ring-2 ring-blue-500 bg-blue-100 cursor-pointer': moveMode && isPossibleMove(rowIndex, colIndex) }"
             @click="onCellClick(rowIndex, colIndex)">
+            
+            <!-- Player pawns -->
             <div v-if="playerBlue.row === rowIndex && playerBlue.col === colIndex" 
               class="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-lg shadow-lg shadow-blue-500/50"
               @click.stop="toggleMoveMode"></div>
             <div v-else-if="playerRed.row === rowIndex && playerRed.col === colIndex" 
               class="w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center font-bold text-lg shadow-lg shadow-red-500/50"></div>
 
-            <!-- Horizontal walls -->
+            <!-- Placed walls - these are always visible when placed -->
             <div v-if="rowIndex < 8 && colIndex < 8 && isWallPlaced('h', rowIndex, colIndex)"
               class="absolute w-[84px] h-2.5 z-10 left-0 top-9 bg-gray-600 shadow-lg shadow-amber-800/50"></div>
-            <!-- Vertical walls -->
             <div v-if="rowIndex < 8 && colIndex < 8 && isWallPlaced('v', rowIndex, colIndex)"
               class="absolute w-2.5 h-[84px] z-10 left-9 top-0 bg-gray-600 shadow-lg shadow-amber-800/50"></div>
 
-            <!-- Wall hotspots -->
+            <!-- Wall placement hotspots - only visible when not in move mode and wall not placed -->
             <div v-if="rowIndex < 8 && colIndex < 8 && !moveMode && !isWallPlaced('h', rowIndex, colIndex)"
-              class="absolute w-[84px] z-10 h-2.5 left-0 top-9  hover:opacity-70 transition-opacity cursor-pointer"
+              class="absolute w-[84px] z-10 h-2.5 left-0 top-9 hover:opacity-70 transition-opacity cursor-pointer"
               :class="{ 'opacity-70 bg-gray-500': isWallHover('h', rowIndex, colIndex) }"
               @mouseenter="onWallHover('h', rowIndex, colIndex)" 
               @mouseleave="onWallHover(null, null, null)"
@@ -88,21 +90,77 @@
   </div>
   <script type="module">
     const { createApp, ref, computed, watch } = Vue;
+
+    /*
+     * Quoridor Game Implementation Overview
+     * ====================================
+     * 
+     * Key Functions:
+     * -------------
+     * Movement:
+     * - isPossibleMove(row, col): Validates moves for blue player
+     * - isPossibleMoveRed(row, col): Validates moves for red player
+     * - isWallBetween(r1, c1, r2, c2): Checks if wall blocks movement between two cells
+     * 
+     * Wall Placement:
+     * - placeWall(type, row, col): Handles wall placement logic and triggers AI turn
+     * - isWallPlaced(type, row, col): Checks if wall exists at given position
+     * - isWallCrossing(type, row, col): Prevents invalid wall intersections
+     * - isBlockingAllPaths(type, row, col): Ensures wall placement doesn't block all paths
+     * - isWallHover(type, row, col): Checks if wall is being hovered over
+     * - onWallHover(type, row, col): Updates wall hover state
+     * 
+     * Path Finding:
+     * - findShortestPath(startRow, startCol, goalRows, hWalls, vWalls, otherPlayer): 
+     *   BFS implementation for finding shortest path to goal
+     * - hasPath(startRow, startCol, goalRows, hWalls, vWalls): 
+     *   Checks if path exists to goal using BFS
+     * 
+     * AI Logic:
+     * - aiRedTurn(): Controls red player's moves and wall placements
+     *   - After 4th turn, 80% chance to place blocking wall
+     *   - Uses path finding to make strategic decisions
+     *   - Can jump over or side-jump around blue player
+     * 
+     * Game State Management:
+     * - toggleMoveMode(): Toggles move selection mode for blue player
+     * - onCellClick(row, col): Handles cell click events for movement
+     * - newGame(): Resets all game state to initial values
+     * 
+     * Vue State:
+     * ---------
+     * Reactive State:
+     * - playerBlue: { row, col, wallsLeft } - Blue player's state
+     * - playerRed: { row, col, wallsLeft } - Red player's state
+     * - moveMode: boolean - Whether in move selection mode
+     * - horizontalWalls: Array of {row, col} - Placed horizontal walls
+     * - verticalWalls: Array of {row, col} - Placed vertical walls
+     * - wallHover: { type, row, col } - Current wall hover state
+     * - winner: string - Current winner ("Blue", "Red", or "")
+     * - turnCount: number - Number of turns taken
+     * 
+     * Watchers:
+     * - watch([playerBlue.row, playerRed.row]): Checks for win condition
+     */
+
     createApp({
       setup() {
+        // Game state
         const playerBlue = ref({ row: 8, col: 4, wallsLeft: 10 });
         const playerRed = ref({ row: 0, col: 4, wallsLeft: 10 });
         const moveMode = ref(false);
-        const horizontalWalls = ref([]); // {row, col}
-        const verticalWalls = ref([]);   // {row, col}
+        const horizontalWalls = ref([]); // Array of {row, col} objects
+        const verticalWalls = ref([]);   // Array of {row, col} objects
         const wallHover = ref({ type: null, row: null, col: null });
         const winner = ref("");
         const turnCount = ref(0);
 
+        // Toggle move mode when clicking blue player's pawn
         function toggleMoveMode() {
           moveMode.value = !moveMode.value;
         }
 
+        // Check if there's a wall between two adjacent cells
         function isWallBetween(r1, c1, r2, c2) {
           // Moving up
           if (r2 === r1 - 1 && c2 === c1) {
@@ -135,16 +193,17 @@
           return false;
         }
 
+        // Check if a move is valid for the blue player
         function isPossibleMove(row, col) {
           if (!moveMode.value) return false;
           const { row: bRow, col: bCol } = playerBlue.value;
           const { row: rRow, col: rCol } = playerRed.value;
-          // Can't move to own position
+          
+          // Can't move to own position or out of bounds
           if (row === bRow && col === bCol) return false;
-          // Out of bounds
           if (row < 0 || row > 8 || col < 0 || col > 8) return false;
 
-          // Directions: [dr, dc]
+          // Possible movement directions: up, down, left, right
           const directions = [
             [-1, 0], // up
             [1, 0],  // down
@@ -155,14 +214,16 @@
           for (const [dr, dc] of directions) {
             const nRow = bRow + dr;
             const nCol = bCol + dc;
-            // 1. Can move up/down/left/right if not blocked by wall, other player, or edge
+            
+            // Case 1: Normal movement to adjacent cell
             if (row === nRow && col === nCol) {
               if (nRow < 0 || nRow > 8 || nCol < 0 || nCol > 8) continue;
               if (isWallBetween(bRow, bCol, nRow, nCol)) continue;
               if (nRow === rRow && nCol === rCol) continue;
               return true;
             }
-            // 2. If blocked by other player, allow jumping 1 block over if that block is open and not blocked by a wall
+            
+            // Case 2: Jumping over opponent
             if (nRow === rRow && nCol === rCol) {
               const jumpRow = rRow + dr;
               const jumpCol = rCol + dc;
@@ -175,7 +236,8 @@
                   }
                 }
               }
-              // 3. If can't jump over due to wall or edge, allow jumping to the side of the other player if that block is open and not blocked by a wall
+              
+              // Case 3: Side-jumping when can't jump over
               if (isWallBetween(rRow, rCol, rRow + dr, rCol + dc) || jumpRow < 0 || jumpRow > 8 || jumpCol < 0 || jumpCol > 8) {
                 // Try side jumps (perpendicular directions)
                 for (const [sdr, sdc] of directions) {
@@ -200,6 +262,7 @@
           return false;
         }
 
+        // Handle cell click for movement
         function onCellClick(row, col) {
           if (winner.value) return;
           if (moveMode.value && isPossibleMove(row, col)) {
@@ -211,6 +274,7 @@
           }
         }
 
+        // Check if a wall is already placed at the given position
         function isWallPlaced(type, row, col) {
           if (type === 'h') {
             return horizontalWalls.value.some(w => w.row === row && w.col === col);
@@ -220,15 +284,17 @@
           return false;
         }
 
+        // Check if a wall is being hovered over
         function isWallHover(type, row, col) {
           return wallHover.value.type === type && wallHover.value.row === row && wallHover.value.col === col;
         }
 
+        // Handle wall hover events
         function onWallHover(type, row, col) {
           wallHover.value = { type, row, col };
         }
 
-        // Helper: BFS to check if a player can reach their goal row
+        // Check if a player can reach their goal row using BFS
         function hasPath(startRow, startCol, goalRows, hWalls, vWalls) {
           const queue = [[startRow, startCol]];
           const visited = Array.from({ length: 9 }, () => Array(9).fill(false));
@@ -243,7 +309,7 @@
               const nr = r + dr, nc = c + dc;
               if (nr < 0 || nr > 8 || nc < 0 || nc > 8) continue;
               if (visited[nr][nc]) continue;
-              // Use the isWallBetween logic, but with provided wall arrays
+              // Check for walls blocking movement
               let blocked = false;
               if (dr === -1 && hWalls.some(w => w.row === nr && (w.col === c || w.col === c - 1))) blocked = true;
               if (dr === 1 && hWalls.some(w => w.row === r && (w.col === c || w.col === c - 1))) blocked = true;
@@ -257,6 +323,7 @@
           return false;
         }
 
+        // Check if placing a wall would block all paths to goal
         function isBlockingAllPaths(type, row, col) {
           const hWalls = horizontalWalls.value.slice();
           const vWalls = verticalWalls.value.slice();
@@ -268,28 +335,29 @@
           return !(blueOk && redOk); // returns true if blocking all paths
         }
 
+        // Check if a wall placement would create an invalid intersection
         function isWallCrossing(type, row, col) {
           if (type === 'h') {
-            // Overlap with another horizontal wall
+            // Check for horizontal wall overlap
             if (
               horizontalWalls.value.some(w => w.row === row && (w.col === col || w.col === col - 1 || w.col === col + 1))
             ) {
               return true;
             }
-            // "+" intersection with vertical wall at (row, col)
+            // Check for intersection with vertical wall
             if (
               verticalWalls.value.some(w => (w.col === col && w.row === row))
             ) {
               return true;
             }
           } else if (type === 'v') {
-            // Overlap with another vertical wall
+            // Check for vertical wall overlap
             if (
               verticalWalls.value.some(w => w.col === col && (w.row === row || w.row === row - 1 || w.row === row + 1))
             ) {
               return true;
             }
-            // "+" intersection with horizontal wall at (row, col) 
+            // Check for intersection with horizontal wall
             if (
               horizontalWalls.value.some(w => (w.row === row && w.col === col))) {
               return true;
@@ -298,6 +366,7 @@
           return false;
         }
 
+        // Handle wall placement
         function placeWall(type, row, col) {
           if (moveMode.value) return;
           if (playerBlue.value.wallsLeft <= 0) return;
@@ -339,6 +408,7 @@
           }
         );
 
+        // Reset game state
         function newGame() {
           playerBlue.value = { row: 8, col: 4, wallsLeft: 10 };
           playerRed.value = { row: 0, col: 4, wallsLeft: 10 };
@@ -349,7 +419,7 @@
           winner.value = "";
         }
 
-        // Helper: Find shortest path using BFS, returns path as array of [row, col]
+        // Find shortest path using BFS
         function findShortestPath(startRow, startCol, goalRows, hWalls, vWalls, otherPlayer) {
           const queue = [[[startRow, startCol]]];
           const visited = Array.from({ length: 9 }, () => Array(9).fill(false));
@@ -365,7 +435,7 @@
               const nr = r + dr, nc = c + dc;
               if (nr < 0 || nr > 8 || nc < 0 || nc > 8) continue;
               if (visited[nr][nc]) continue;
-              // Use the isWallBetween logic, but with provided wall arrays
+              // Check for walls blocking movement
               let blocked = false;
               if (dr === -1 && hWalls.some(w => w.row === nr && (w.col === c || w.col === c - 1))) blocked = true;
               if (dr === 1 && hWalls.some(w => w.row === r && (w.col === c || w.col === c - 1))) blocked = true;
@@ -379,7 +449,7 @@
           return null;
         }
 
-        // Red's movement logic (mirrors blue's isPossibleMove, but from red's perspective)
+        // Check if a move is valid for the red player (AI)
         function isPossibleMoveRed(row, col) {
           const { row: rRow, col: rCol } = playerRed.value;
           const { row: bRow, col: bCol } = playerBlue.value;
@@ -391,14 +461,14 @@
           for (const [dr, dc] of directions) {
             const nRow = rRow + dr;
             const nCol = rCol + dc;
-            // 1. Can move if not blocked by wall, blue, or edge
+            // Case 1: Normal movement to adjacent cell
             if (row === nRow && col === nCol) {
               if (nRow < 0 || nRow > 8 || nCol < 0 || nCol > 8) continue;
               if (isWallBetween(rRow, rCol, nRow, nCol)) continue;
               if (nRow === bRow && nCol === bCol) continue;
               return true;
             }
-            // 2. If blocked by blue, allow jumping 1 block over if open and not blocked by a wall
+            // Case 2: Jumping over blue player
             if (nRow === bRow && nCol === bCol) {
               const jumpRow = bRow + dr;
               const jumpCol = bCol + dc;
@@ -411,7 +481,7 @@
                   }
                 }
               }
-              // 3. If can't jump over due to wall or edge, allow jumping to the side of blue if open and not blocked by a wall
+              // Case 3: Side-jumping when can't jump over
               if (isWallBetween(bRow, bCol, bRow + dr, bCol + dc) || jumpRow < 0 || jumpRow > 8 || jumpCol < 0 || jumpCol > 8) {
                 for (const [sdr, sdc] of directions) {
                   if (sdr === dr && sdc === dc) continue;
@@ -434,6 +504,7 @@
           return false;
         }
 
+        // AI logic for red player's turn
         function aiRedTurn() {
           if (winner.value) return;
 
@@ -442,7 +513,7 @@
 
           // After 4th turn, 80% chance to try to place a wall to block blue
           if (turnCount.value >= 4 && playerRed.value.wallsLeft > 0 && Math.random() < 0.8) {
-            // Find blue's shortest path
+            // Find shortest paths for both players
             const bluePath = findShortestPath(
               playerBlue.value.row,
               playerBlue.value.col,
@@ -527,7 +598,7 @@
             }
           }
 
-          // Otherwise, move red as before (shortest path, with jump logic)
+          // If no wall placement, move red along shortest path
           const path = findShortestPath(
             playerRed.value.row,
             playerRed.value.col,

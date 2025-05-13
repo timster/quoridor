@@ -113,7 +113,7 @@ bug: now add back in the stuff where red can jump over blue.
 
 after the 4th turn, red should sometimes try to block blue by placing walls (following all the same wall rules as blue). but don't place a wall if it would make red's path longer too.
 
-instead of 50% make it 80% that
+instead of 50% make it 80% that.
 
 add instructions how to play at the bottom. include something like:
 goal is to get to the other side of the board
@@ -125,6 +125,12 @@ goal is to get to the other side of the board
 to move: click your pawn, then click where you want to move
 to place wall: hover over and click where you want the wall
 
-replace all styles with tailwind
+replace all styles with tailwind.
 
-you got rid of the "how to place a wall" and "how to move"
+you got rid of the "how to place a wall" and "how to move".
+
+clean up all the comments. make comments more clear, add more where needed, make them consistent style.
+
+at the top of the script somewhere, add an "overview" of how the code works and relevant functions.
+
+get rid of the core game compoenents section, add descriptions of ALL the functions in the vue part.
