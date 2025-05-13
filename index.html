@@ -19,8 +19,14 @@
       </div>
     </div>
     <div class="flex justify-between items-center mb-5 mt-2">
-      <div class="font-bold text-lg text-blue-500">Blue Walls: {{ playerBlue.wallsLeft }}</div>
-      <div class="font-bold text-lg text-red-500">Red Walls: {{ playerRed.wallsLeft }}</div>
+      <div class="font-bold text-lg text-blue-500">
+        Blue Walls: {{ playerBlue.wallsLeft }}<br>
+        <span class="text-sm font-normal">({{ bluePathLength }} blocks to goal)</span>
+      </div>
+      <div class="font-bold text-lg text-red-500">
+        Red Walls: {{ playerRed.wallsLeft }}<br>
+        <span class="text-sm font-normal">({{ redPathLength }} blocks to goal)</span>
+      </div>
     </div>
     <div class="grid grid-cols-9 gap-1 mb-6">
       <template v-for="(row, rowIndex) in 9">
@@ -154,6 +160,31 @@
         const wallHover = ref({ type: null, row: null, col: null });
         const winner = ref("");
         const turnCount = ref(0);
+
+        // Computed properties for path lengths
+        const bluePathLength = computed(() => {
+          const path = findShortestPath(
+            playerBlue.value.row,
+            playerBlue.value.col,
+            [0],
+            horizontalWalls.value,
+            verticalWalls.value,
+            playerRed.value
+          );
+          return path ? path.length - 1 : '∞';
+        });
+
+        const redPathLength = computed(() => {
+          const path = findShortestPath(
+            playerRed.value.row,
+            playerRed.value.col,
+            [8],
+            horizontalWalls.value,
+            verticalWalls.value,
+            playerBlue.value
+          );
+          return path ? path.length - 1 : '∞';
+        });
 
         // Toggle move mode when clicking blue player's pawn
         function toggleMoveMode() {
@@ -737,7 +768,9 @@
           placeWall,
           winner,
           newGame,
-          aiRedTurn
+          aiRedTurn,
+          bluePathLength,
+          redPathLength
         };
       }
     }).mount('#app');

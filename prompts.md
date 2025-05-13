@@ -136,3 +136,5 @@ at the top of the script somewhere, add an "overview" of how the code works and 
 get rid of the core game compoenents section, add descriptions of ALL the functions in the vue part.
 
 if blue can win on their next move, ALWAYS place a wall to block blue.
+
+under blue walls and red walls at the top, show how many blocks until each player reaches the finish.
