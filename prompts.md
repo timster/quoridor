@@ -138,3 +138,5 @@ get rid of the core game compoenents section, add descriptions of ALL the functi
 if blue can win on their next move, ALWAYS place a wall to block blue.
 
 under blue walls and red walls at the top, show how many blocks until each player reaches the finish.
+
+red ai seems to be able to place walls outside bounds of baord. try the col-1 but only if it's within bounds.

@@ -558,22 +558,29 @@
               const [from, to] = [bluePath[0], bluePath[1]];
               const wallOptions = [];
 
-              // Check for possible horizontal wall
+              // Check for possible vertical wall
               if (from[0] === to[0] && Math.abs(from[1] - to[1]) === 1) {
                 // Moving left/right, so vertical wall between them
                 const row = from[0];
                 const col = Math.min(from[1], to[1]);
-                wallOptions.push({ type: 'v', row, col });
-                wallOptions.push({ type: 'v', row: row - 2, col });
-
+                if (row >= 0 && row < 8 && col >= 0 && col < 8) {
+                  wallOptions.push({ type: 'v', row, col });
+                  if (col - 1 >= 0) {
+                    wallOptions.push({ type: 'v', row, col: col - 1 });
+                  }
+                }
               }
-              // Check for possible vertical wall
+              // Check for possible horizontal wall
               if (from[1] === to[1] && Math.abs(from[0] - to[0]) === 1) {
                 // Moving up/down, so horizontal wall between them
                 const row = Math.min(from[0], to[0]);
                 const col = from[1];
-                wallOptions.push({ type: 'h', row, col });
-                wallOptions.push({ type: 'h', row, col: col - 1 });
+                if (row >= 0 && row < 8 && col >= 0 && col < 8) {
+                  wallOptions.push({ type: 'h', row, col });
+                  if (col - 1 >= 0) {
+                    wallOptions.push({ type: 'h', row, col: col - 1 });
+                  }
+                }
               }
 
               // Try to place a blocking wall
@@ -623,14 +630,18 @@
                 // Moving left/right, so vertical wall between them
                 const row = from[0];
                 const col = Math.min(from[1], to[1]);
-                wallOptions.push({ type: 'v', row, col });
+                if (row >= 0 && row < 8 && col >= 0 && col < 8) {
+                  wallOptions.push({ type: 'v', row, col });
+                }
               }
               // Check for possible vertical wall
               if (from[1] === to[1] && Math.abs(from[0] - to[0]) === 1) {
                 // Moving up/down, so horizontal wall between them
                 const row = Math.min(from[0], to[0]);
                 const col = from[1];
-                wallOptions.push({ type: 'h', row, col });
+                if (row >= 0 && row < 8 && col >= 0 && col < 8) {
+                  wallOptions.push({ type: 'h', row, col });
+                }
               }
 
               for (const { type, row, col } of wallOptions) {
