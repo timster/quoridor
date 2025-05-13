@@ -134,3 +134,5 @@ clean up all the comments. make comments more clear, add more where needed, make
 at the top of the script somewhere, add an "overview" of how the code works and relevant functions.
 
 get rid of the core game compoenents section, add descriptions of ALL the functions in the vue part.
+
+if blue can win on their next move, ALWAYS place a wall to block blue.

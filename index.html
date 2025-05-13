@@ -511,6 +511,58 @@
           const hWalls = horizontalWalls.value.slice();
           const vWalls = verticalWalls.value.slice();
 
+          // First priority: Check if blue can win on next move and block it
+          if (playerRed.value.wallsLeft > 0) {
+            const bluePath = findShortestPath(
+              playerBlue.value.row,
+              playerBlue.value.col,
+              [0],
+              hWalls,
+              vWalls,
+              playerRed.value
+            );
+            
+            // If blue can reach goal in 1 move, try to block it
+            if (bluePath && bluePath.length === 2) {
+              const [from, to] = [bluePath[0], bluePath[1]];
+              const wallOptions = [];
+
+              // Check for possible horizontal wall
+              if (from[0] === to[0] && Math.abs(from[1] - to[1]) === 1) {
+                // Moving left/right, so vertical wall between them
+                const row = from[0];
+                const col = Math.min(from[1], to[1]);
+                wallOptions.push({ type: 'v', row, col });
+                wallOptions.push({ type: 'v', row: row - 2, col });
+
+              }
+              // Check for possible vertical wall
+              if (from[1] === to[1] && Math.abs(from[0] - to[0]) === 1) {
+                // Moving up/down, so horizontal wall between them
+                const row = Math.min(from[0], to[0]);
+                const col = from[1];
+                wallOptions.push({ type: 'h', row, col });
+                wallOptions.push({ type: 'h', row, col: col - 1 });
+              }
+
+              // Try to place a blocking wall
+              for (const { type, row, col } of wallOptions) {
+                if (
+                  !isWallPlaced(type, row, col) &&
+                  !isWallCrossing(type, row, col) &&
+                  !isBlockingAllPaths(type, row, col)
+                ) {
+                  // Place the wall
+                  if (type === 'h') horizontalWalls.value.push({ row, col });
+                  if (type === 'v') verticalWalls.value.push({ row, col });
+                  playerRed.value.wallsLeft--;
+                  turnCount.value++;
+                  return;
+                }
+              }
+            }
+          }
+
           // After 4th turn, 80% chance to try to place a wall to block blue
           if (turnCount.value >= 4 && playerRed.value.wallsLeft > 0 && Math.random() < 0.8) {
             // Find shortest paths for both players
