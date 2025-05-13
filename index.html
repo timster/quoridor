@@ -644,8 +644,12 @@
                 }
               }
 
+              // Try all possible wall placements and find the one that increases blue's path the most
+              let bestWall = null;
+              let maxPathIncrease = 0;
+
               for (const { type, row, col } of wallOptions) {
-                // Only place if legal and not already placed
+                // Only consider if legal and not already placed
                 if (
                   !isWallPlaced(type, row, col) &&
                   !isWallCrossing(type, row, col) &&
@@ -680,14 +684,23 @@
                     newBluePath.length > bluePath.length &&
                     newRedPath.length === redPath.length
                   ) {
-                    // Place the wall
-                    if (type === 'h') horizontalWalls.value.push({ row, col });
-                    if (type === 'v') verticalWalls.value.push({ row, col });
-                    playerRed.value.wallsLeft--;
-                    turnCount.value++;
-                    return;
+                    const pathIncrease = newBluePath.length - bluePath.length;
+                    if (pathIncrease > maxPathIncrease) {
+                      maxPathIncrease = pathIncrease;
+                      bestWall = { type, row, col };
+                    }
                   }
                 }
+              }
+
+              // If we found a wall that increases blue's path by 4 or more moves, place it
+              if (bestWall && maxPathIncrease >= 4) {
+                const { type, row, col } = bestWall;
+                if (type === 'h') horizontalWalls.value.push({ row, col });
+                if (type === 'v') verticalWalls.value.push({ row, col });
+                playerRed.value.wallsLeft--;
+                turnCount.value++;
+                return;
               }
             }
           }
